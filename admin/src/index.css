@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+@import "tailwindcss";
+
+
+
+@theme{
+  --color-primary:#0891B2;
+}
+::-webkit-scrollbar{
+  /* @apply hidden */display: none;
+}
+*{
+  font-family:Outfit
+}
+
+
+
+ /* @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+
+/* Now all other styles 
+:root {
+  --color-primary:#0891B2; 
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  font-family: 'Outfit', sans-serif;
+} */
