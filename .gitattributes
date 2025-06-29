@@ -1,2 +1,2 @@
-echo "* text=auto" > .gitattributes
+* text=auto
 
