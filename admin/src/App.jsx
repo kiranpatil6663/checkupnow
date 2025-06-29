@@ -1,6 +1,6 @@
 import React, { use, useContext } from 'react'
 import { Routes, Route } from 'react-router-dom';
-import Login from './pages/login'
+import Login from './pages/Login'
  import { ToastContainer, toast } from 'react-toastify';
  import 'react-toastify/dist/ReactToastify.css'
 import { AdminContext } from './context/AdminContext';
