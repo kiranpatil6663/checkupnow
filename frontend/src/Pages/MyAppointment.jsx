@@ -50,21 +50,54 @@ const cancelAppointment =async(appointmentId)=>{
 }
 //payment handler
 
-const markPaid = async (appointmentId) => {
+const payOnline = async (appointmentId) => {
   try {
     const { data } = await axios.post(
-      backendUrl + '/api/user/mark-paid',
+      backendUrl + '/api/payment/create-order',
       { appointmentId },
       { headers: { token } }
     );
 
-    if (data.success) {
-      toast.success("payment Done!");
-      getUserAppointments();  // fetch latest data
-      getDoctorsData();       // optional: if you need doctor status refreshed too
-    } else {
-      toast.error(data.message);
+    if (!data.success) {
+      return toast.error(data.message);
     }
+
+    const options = {
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: data.order.amount,
+      currency: data.order.currency,
+      name: 'CheckUpNow',
+      description: 'Appointment Payment',
+      order_id: data.order.id,
+      handler: async (response) => {
+        try {
+          const { data: verifyData } = await axios.post(
+            backendUrl + '/api/payment/verify',
+            {
+              appointmentId,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            },
+            { headers: { token } }
+          );
+
+          if (verifyData.success) {
+            toast.success('Payment successful!');
+            getUserAppointments();
+          } else {
+            toast.error(verifyData.message);
+          }
+        } catch (error) {
+          console.log(error);
+          toast.error(error.message);
+        }
+      },
+      theme: { color: '#0891B2' }, // matches your existing primary color
+    };
+
+    const razorpayWindow = new window.Razorpay(options);
+    razorpayWindow.open();
   } catch (error) {
     console.log(error);
     toast.error(error.message);
@@ -102,7 +135,7 @@ useEffect(()=>{
            {/* PAY ONLINE / PAID status */}
 {!item.payment && !item.cancelled ? (
   <button
-    onClick={() => markPaid(item._id)}
+   onClick={() => payOnline(item._id)}
     className="text-sm text-stone-500 text-center sm:min-w-48 py-2 border hover:bg-primary hover:text-white transition-all duration-300"
   >
     Pay Online
