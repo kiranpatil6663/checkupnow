@@ -20,3 +20,18 @@ class SearchDoctorsResult(BaseModel):
     count: int
     doctors: List[DoctorResult]
     message: Optional[str] = None
+
+class SlotResult(BaseModel):
+    """A single available time slot."""
+    date: str        # ISO format, e.g. "2026-07-25"
+    time: str        # e.g. "10:00 AM"
+
+
+class CheckSlotsResult(BaseModel):
+    """Result of the check_slots tool call."""
+    success: bool
+    doctor_id: str
+    doctor_name: Optional[str] = None
+    date: str
+    available_slots: List[str]
+    message: Optional[str] = None

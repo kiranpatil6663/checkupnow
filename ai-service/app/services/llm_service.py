@@ -5,6 +5,7 @@ from app.core.logging_config import logger
 from app.prompts.intent_parser_v1 import INTENT_PARSER_PROMPT_V1
 from app.schemas.intent import PatientIntent
 from app.tools.doctor_tools import search_doctors
+from app.tools.slot_tools import check_slots
 
 llm = None
 structured_llm = None
@@ -17,10 +18,10 @@ if settings.groq_api_key:
         temperature=0,
     )
     structured_llm = llm.with_structured_output(PatientIntent)
-    tool_llm = llm.bind_tools([search_doctors])
+    tool_llm = llm.bind_tools([search_doctors, check_slots])
 
 MAX_RETRIES = 2
-AVAILABLE_TOOLS = {"search_doctors": search_doctors}
+AVAILABLE_TOOLS = {"search_doctors": search_doctors, "check_slots": check_slots}
 
 
 async def parse_patient_intent(patient_message: str) -> PatientIntent:
@@ -60,6 +61,8 @@ async def handle_chat_with_tools(patient_message: str) -> str:
         logger.info("handle_chat_with_tools: no tool call made, direct response returned")
         return ai_response.content
 
+    tool_results_raw = []
+
     for tool_call in ai_response.tool_calls:
         tool_name = tool_call["name"]
         tool_args = tool_call["args"]
@@ -71,7 +74,45 @@ async def handle_chat_with_tools(patient_message: str) -> str:
 
         logger.info(f"Executing tool '{tool_name}' with args: {tool_args}")
         tool_result = await AVAILABLE_TOOLS[tool_name].ainvoke(tool_args)
+        tool_results_raw.append((tool_name, tool_result))
         messages.append(ToolMessage(content=tool_result.model_dump_json(), tool_call_id=tool_call["id"]))
 
     final_response = await tool_llm.ainvoke(messages)
-    return final_response.content
+    logger.info(f"handle_chat_with_tools: final content={final_response.content!r}, tool_calls={final_response.tool_calls}")
+
+    if final_response.content:
+        return final_response.content
+
+    logger.warning("handle_chat_with_tools: model returned empty final content, using fallback narration")
+    return build_fallback_reply(tool_results_raw)
+
+
+def build_fallback_reply(tool_results_raw: list) -> str:
+    """
+    Safety net for when the LLM's final narration turn comes back empty
+    (a known quirk with some tool-calling models). Builds a plain but
+    accurate reply directly from the structured tool results, so the
+    user never sees a blank response.
+    """
+    if not tool_results_raw:
+        return "I wasn't able to find an answer to that. Could you rephrase your request?"
+
+    parts = []
+    for tool_name, result in tool_results_raw:
+        if tool_name == "search_doctors":
+            if not result.success or result.count == 0:
+                parts.append(result.message or "No doctors found matching that.")
+            else:
+                names = ", ".join(f"{d.name} ({d.speciality})" for d in result.doctors)
+                parts.append(f"I found {result.count} doctor(s): {names}.")
+
+        elif tool_name == "check_slots":
+            if not result.success:
+                parts.append(result.message or "I couldn't check slots for that doctor.")
+            elif not result.available_slots:
+                parts.append(f"No available slots for {result.doctor_name} on {result.date}.")
+            else:
+                slots = ", ".join(result.available_slots)
+                parts.append(f"{result.doctor_name} has these slots open on {result.date}: {slots}.")
+
+    return " ".join(parts)
